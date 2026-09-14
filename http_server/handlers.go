@@ -1,20 +1,26 @@
-package http
+package http_server
 
 import (
-	maincommands "HR_system/main_commands"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
 )
 
-type Handlers struct {
-	Table *maincommands.TableEmployees
+type EmployeesStorage interface {
+	AddEmp(ctx context.Context, emp Employee) (int, error)
+	AllEmp(ctx context.Context) ([]Employee, error)
+	DelEmp(ctx context.Context, id int) error
 }
 
-func NewHandlers(table *maincommands.TableEmployees) *Handlers {
+type Handlers struct {
+	Storage EmployeesStorage
+}
+
+func NewHandlers(storege EmployeesStorage) *Handlers {
 	return &Handlers{
-		Table: table,
+		Storage: storege,
 	}
 }
 
@@ -46,31 +52,31 @@ func (h *Handlers) HandleNewEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Table.AddEmp(maincommands.Employee(employee)); err != nil {
-		if errors.Is(err, maincommands.ErrIdAlreadyUsed) {
-			h.writeErr(w, err, http.StatusConflict)
-			return
-		}
+	id, err := h.Storage.AddEmp(r.Context(), Employee(employee))
+	if err != nil {
 		h.writeErr(w, err, http.StatusInternalServerError)
 		return
 	}
+
+	employee.ID = id
 
 	w.WriteHeader(http.StatusCreated)
 	h.Output(w, employee)
 }
 
 func (h *Handlers) HandleAllEmployee(w http.ResponseWriter, r *http.Request) {
-	tableDTO, err := h.Table.AllEmp()
+	employees, err := h.Storage.AllEmp(r.Context())
 	if err != nil {
-		if errors.Is(err, maincommands.ErrTableIsEmpty) {
-			h.writeErr(w, err, http.StatusBadRequest)
-			return
-		}
 		h.writeErr(w, err, http.StatusInternalServerError)
 		return
 	}
 
-	h.Output(w, tableDTO)
+	resp := make([]EmpDTO, 0, len(employees))
+	for _, employee := range employees {
+		resp = append(resp, EmpDTO(employee))
+	}
+
+	h.Output(w, resp)
 }
 
 func (h *Handlers) HandelDelEmployee(w http.ResponseWriter, r *http.Request) {
@@ -80,9 +86,9 @@ func (h *Handlers) HandelDelEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Table.DelEmp(idDTO.ID); err != nil {
-		if errors.Is(err, maincommands.ErrNotFoundEmployee) {
-			h.writeErr(w, err, http.StatusBadRequest)
+	if err := h.Storage.DelEmp(r.Context(), idDTO.ID); err != nil {
+		if errors.Is(err, ErrNotFoundEmployee) {
+			h.writeErr(w, err, http.StatusNotFound)
 			return
 		}
 		h.writeErr(w, err, http.StatusInternalServerError)

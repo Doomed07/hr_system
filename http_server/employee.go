@@ -1,4 +1,6 @@
-package maincommands
+package http_server
+
+import "errors"
 
 type Employee struct {
 	ID       int
@@ -13,3 +15,5 @@ func NewEmpoyee(id int, fullname, position string) Employee {
 		Position: position,
 	}
 }
+
+var ErrNotFoundEmployee = errors.New("Not found employee with specified ID")
