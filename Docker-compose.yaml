@@ -1,0 +1,6 @@
+services:
+  hr_system:
+    build: .
+    container_name: hr_system
+    ports:
+      - "8080:9999"
